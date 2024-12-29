@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend API Testing</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>Backend API Testing</h1>
+
+        <!-- Shayari Section -->
+        <h2>Shayari</h2>
+        <button class="btn btn-primary" onclick="getShayari()">Get All Shayaris</button>
+        <div id="shayariList" class="mt-3"></div>
+
+        <!-- Post Shayari -->
+        <div class="mt-3">
+            <h3>Post a New Shayari</h3>
+            <form id="shayariForm">
+                <input type="text" class="form-control mb-2" id="title" placeholder="Title" required>
+                <textarea class="form-control mb-2" id="content" placeholder="Content" required></textarea>
+                <button type="submit" class="btn btn-success">Post Shayari</button>
+            </form>
+        </div>
+
+        <!-- Chat Section -->
+        <h2>Chat</h2>
+        <button class="btn btn-primary" onclick="getMessages('room1')">Get Messages from Room 1</button>
+        <div id="chatMessages" class="mt-3"></div>
+
+        <!-- Confessions Section -->
+        <h2>Confessions</h2>
+        <button class="btn btn-primary" onclick="getConfessions()">Get All Confessions</button>
+        <div id="confessionList" class="mt-3"></div>
+
+        <!-- Poll Section -->
+        <h2>Poll</h2>
+        <button class="btn btn-primary" onclick="getPolls()">Get Active Polls</button>
+        <div id="pollList" class="mt-3"></div>
+
+        <!-- Upload Section -->
+        <h2>Upload Images</h2>
+        <form id="uploadForm" enctype="multipart/form-data">
+            <input type="file" name="images" multiple class="form-control mb-2" required>
+            <button type="submit" class="btn btn-primary">Upload</button>
+        </form>
+        <div id="uploadedImages" class="mt-3"></div>
+    </div>
+
+    <script>
+        // Get all Shayaris
+        function getShayari() {
+            $.get('/api/shayari', function(data) {
+                let shayariHtml = '';
+                data.shayaris.forEach(shayari => {
+                    shayariHtml += `
+                        <div class="card mt-2">
+                            <div class="card-body">
+                                <h5 class="card-title">${shayari.title}</h5>
+                                <p class="card-text">${shayari.content}</p>
+                                <button class="btn btn-secondary" onclick="likeShayari('${shayari._id}')">Like</button>
+
+                                <!-- Comment section -->
+                                <div id="comments-${shayari._id}" class="mt-3">
+                                    <h6>Comments</h6>
+                                    <ul>
+                                        ${shayari.comments.map(comment => `<li>${comment.text}</li>`).join('')}
+                                    </ul>
+                                    <form onsubmit="postComment(event, '${shayari._id}')">
+                                        <textarea class="form-control mb-2" placeholder="Add a comment" required></textarea>
+                                        <button type="submit" class="btn btn-primary">Post Comment</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                $('#shayariList').html(shayariHtml);
+            });
+        }
+
+        // Like Shayari
+        function likeShayari(id) {
+            $.patch(`/api/shayari/${id}/like`, function(data) {
+                alert('Shayari liked!');
+                getShayari();
+            });
+        }
+
+        // Post a new Shayari
+        $('#shayariForm').submit(function(event) {
+            event.preventDefault();
+            const newShayari = {
+                title: $('#title').val(),
+                content: $('#content').val(),
+            };
+
+            $.post('/api/shayari', newShayari, function(data) {
+                alert('Shayari posted!');
+                getShayari();
+            });
+        });
+
+        // Get messages from a chat room
+        function getMessages(roomId) {
+            $.get(`/api/chat/${roomId}/messages`, function(data) {
+                let messagesHtml = '';
+                data.forEach(message => {
+                    messagesHtml += `<p>${message.content}</p>`;
+                });
+                $('#chatMessages').html(messagesHtml);
+            });
+        }
+
+        // Get all confessions
+        function getConfessions() {
+            $.get('/api/confessions', function(data) {
+                let confessionHtml = '';
+                data.forEach(confession => {
+                    confessionHtml += `<p>${confession.content}</p>`;
+                });
+                $('#confessionList').html(confessionHtml);
+            });
+        }
+
+        // Get active polls
+        function getPolls() {
+            $.get('/api/polls', function(data) {
+                let pollHtml = '';
+                data.forEach(poll => {
+                    pollHtml += `
+                        <div class="card mt-2">
+                            <div class="card-body">
+                                <h5 class="card-title">${poll.question}</h5>
+                                ${poll.options.map((option, index) => `
+                                    <div>
+                                        <button class="btn btn-secondary" onclick="votePoll('${poll._id}', ${index})">${option.text}</button>
+                                        <span class="badge bg-info">${option.votes} votes</span> <!-- Show vote count -->
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                });
+                $('#pollList').html(pollHtml);
+            });
+        }
+
+        // Vote on a poll option
+        function votePoll(pollId, optionIndex) {
+            $.ajax({
+                url: `/api/polls/${pollId}/vote?optionIndex=${optionIndex}`,
+                method: 'PATCH',
+                success: function() {
+                    alert('Vote casted!');
+                    getPolls();
+                }
+            });
+        }
+
+        // Post a new comment on a Shayari
+        function postComment(event, shayariId) {
+            event.preventDefault();
+            const commentText = $(`#comments-${shayariId} textarea`).val();
+            const newComment = { text: commentText };
+
+            $.post(`/api/shayari/${shayariId}/comment`, newComment, function(data) {
+                alert('Comment posted!');
+                getShayari();  // Refresh the Shayari list to show the new comment
+            });
+        }
+
+        // Upload images
+        $('#uploadForm').submit(function(event) {
+            event.preventDefault();
+            const formData = new FormData(this);
+            $.ajax({
+                url: '/api/upload/images',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    let uploadedHtml = '';
+                    response.imageUrls.forEach(url => {
+                        uploadedHtml += `<img src="${url}" class="img-thumbnail" width="100" />`;
+                    });
+                    $('#uploadedImages').html(uploadedHtml);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

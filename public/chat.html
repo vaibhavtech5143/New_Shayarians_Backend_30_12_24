@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Room</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    #chat-container {
+      border: 1px solid #ccc;
+      padding: 10px;
+      width: 300px;
+      height: 400px;
+      overflow-y: scroll;
+    }
+    #message-input {
+      width: 100%;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Chat Room</h1>
+  <div>
+    <input id="room-id" placeholder="Enter Room ID" />
+    <button id="join-room">Join Room</button>
+    <button id="get-rooms">Get Live Chat Rooms</button>
+    <button id="fetch-messages">Fetch Messages from Room</button>
+  </div>
+  <div id="chat-container"></div>
+  <div id="message-section" style="display: none;">
+    <input id="message-input" placeholder="Type your message" />
+    <button id="send-message">Send</button>
+  </div>
+
+  <script>
+    const socket = io();
+  
+    const joinRoomButton = document.getElementById("join-room");
+    const getRoomsButton = document.getElementById("get-rooms");
+    const fetchMessagesButton = document.getElementById("fetch-messages");
+    const sendMessageButton = document.getElementById("send-message");
+    const chatContainer = document.getElementById("chat-container");
+    const roomIdInput = document.getElementById("room-id");
+    const messageInput = document.getElementById("message-input");
+    const messageSection = document.getElementById("message-section");
+  
+    let roomId = localStorage.getItem("roomId") || "";
+  
+    // Auto-rejoin room on page load
+    if (roomId) {
+      socket.emit("join_room", roomId);
+      chatContainer.innerHTML += `<p>Rejoined room: ${roomId}</p>`;
+      messageSection.style.display = "block";
+    }
+  
+    // Join a chat room
+    joinRoomButton.addEventListener("click", () => {
+      roomId = roomIdInput.value;
+      if (!roomId) {
+        alert("Please enter a Room ID");
+        return;
+      }
+      socket.emit("join_room", roomId);
+      localStorage.setItem("roomId", roomId); // Save room ID
+      chatContainer.innerHTML += `<p>Joined room: ${roomId}</p>`;
+      messageSection.style.display = "block";
+    });
+  
+    // Send a message to the chat room
+    sendMessageButton.addEventListener("click", () => {
+  const message = messageInput.value;
+  if (!message || !roomId) {
+    alert("Please enter a message and join a room");
+    return;
+  }
+  const timestamp = new Date().toLocaleTimeString();
+  socket.emit("send_message", { roomId, message });
+
+  chatContainer.innerHTML += `<p><strong>You:</strong> ${message} <small>${timestamp}</small></p>`;
+  messageInput.value = "";
+});
+
+    // Fetch live chat rooms
+    getRoomsButton.addEventListener("click", async () => {
+      try {
+        const response = await fetch("/api/chat");
+        const rooms = await response.json();
+        chatContainer.innerHTML += `<p><strong>Live Chat Rooms:</strong> ${rooms.map(room => room.roomId).join(", ")}</p>`;
+      } catch (error) {
+        console.error("Error fetching rooms:", error);
+        chatContainer.innerHTML += `<p>Error fetching rooms</p>`;
+      }
+    });
+  
+    // Fetch messages from the room
+    fetchMessagesButton.addEventListener("click", async () => {
+      if (!roomId) {
+        alert("Please join a room first");
+        return;
+      }
+      try {
+        const response = await fetch(`/api/chat/${roomId}/messages`);
+        const messages = await response.json();
+        chatContainer.innerHTML += `<p><strong>Messages in Room ${roomId}:</strong></p>`;
+        messages.forEach(msg => {
+          chatContainer.innerHTML += `<p>${msg.content} - ${new Date(msg.timestamp).toLocaleString()}</p>`;
+        });
+      } catch (error) {
+        console.error("Error fetching messages:", error);
+        chatContainer.innerHTML += `<p>Error fetching messages</p>`;
+      }
+    });
+  
+    // Receive messages from other users
+    socket.on('receive_message', (data) => {
+  const { content, sender, timestamp } = data;
+
+  if (sender !== socket.id) {
+    const formattedTime = new Date(timestamp).toLocaleTimeString();
+    chatContainer.innerHTML += `<p><strong>Other:</strong> ${content} <small>${formattedTime}</small></p>`;
+  }
+});
+
+    // Clear localStorage on disconnect (Optional)
+    window.addEventListener("beforeunload", () => {
+      localStorage.removeItem("roomId");
+    });
+  </script>
+  
+</body>
+</html>
